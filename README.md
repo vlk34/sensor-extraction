@@ -8,6 +8,7 @@ Files
 - scripts/sensor_extract.py: Main CLI utility
 - requirements.txt: Minimal Python dependencies
 - scripts/visualize_temperature.py: Simulated temperature plots (Matplotlib + Seaborn)
+- scripts/analyze_timeseries.py: Per-sensor/metric statistics and anomaly counts
 
 Prerequisites
 
@@ -60,6 +61,21 @@ Outputs are written under OUTPUT_DIR or ./outputs:
 - temperature_scatter.png (scatter over time)
 - temperature_hist.png (histogram with KDE)
 - temperature_box.png (boxplot by hour)
+
+Analyze time-series summaries
+Compute per-sensor/metric statistics from existing CSVs or simulated data:
+
+# Analyze CSV exports
+
+python scripts/analyze_timeseries.py --inputs outputs/\*.csv --zscore-threshold 3.0 --json
+
+# Simulate data (3 sensors, 2 days, temperature & vibration)
+
+python scripts/analyze_timeseries.py --simulate --num-sensors 3 --num-days 2 --metrics temperature vibration --json
+
+Outputs:
+
+- _\_summary.csv and optional _\_summary.json in OUTPUT_DIR or ./outputs
 
 CLI options:
 
