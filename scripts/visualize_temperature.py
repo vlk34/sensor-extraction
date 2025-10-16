@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """
-Generate simulated temperature data and produce example plots using
-Matplotlib and Seaborn. Useful for validating visualization styles
-and reporting figures without accessing production data.
+Generate simulated temperature data and produce example plots.
 
-Outputs (written to OUTPUT_DIR or ./outputs):
+Purpose
+- Provide quick, reproducible figures to validate visualization styles and
+  share reporting artifacts without relying on live data sources.
+
+Outputs (written to OUTPUT_DIR or ./outputs)
 - temperature_scatter.png: Scatter plot of temperature over time
 - temperature_hist.png: Histogram with KDE
 - temperature_box.png: Boxplot by hour of day
@@ -23,6 +25,7 @@ import seaborn as sns
 
 @dataclass
 class SimConfig:
+    """Simulation parameters for temperature time series."""
     num_days: int = 3
     readings_per_hour: int = 6  # every 10 minutes
     base_celsius: float = 28.0
@@ -31,12 +34,14 @@ class SimConfig:
 
 
 def ensure_output_dir() -> str:
+    """Return output directory path, creating it if necessary."""
     path = os.getenv("OUTPUT_DIR") or "outputs"
     os.makedirs(path, exist_ok=True)
     return path
 
 
 def simulate_temperature(cfg: SimConfig, start: datetime) -> pd.DataFrame:
+    """Generate a diurnal temperature signal with Gaussian noise."""
     total_hours = cfg.num_days * 24
     total_points = total_hours * cfg.readings_per_hour
     dt_minutes = 60 // cfg.readings_per_hour
@@ -58,6 +63,7 @@ def simulate_temperature(cfg: SimConfig, start: datetime) -> pd.DataFrame:
 
 
 def plot_scatter(df: pd.DataFrame, outdir: str) -> str:
+    """Write a scatter figure and return its file path."""
     plt.figure(figsize=(10, 4))
     plt.scatter(df["timestamp"], df["temperature_c"], s=10, color="#1f77b4")
     plt.title("Simulated Temperature over Time")
@@ -71,6 +77,7 @@ def plot_scatter(df: pd.DataFrame, outdir: str) -> str:
 
 
 def plot_hist_kde(df: pd.DataFrame, outdir: str) -> str:
+    """Write a histogram with KDE figure and return its file path."""
     plt.figure(figsize=(6, 4))
     sns.histplot(df["temperature_c"], kde=True, color="#2ca02c", bins=30)
     plt.title("Temperature Distribution")
@@ -84,6 +91,7 @@ def plot_hist_kde(df: pd.DataFrame, outdir: str) -> str:
 
 
 def plot_box_by_hour(df: pd.DataFrame, outdir: str) -> str:
+    """Write a per-hour boxplot figure and return its file path."""
     df2 = df.copy()
     df2["hour"] = df2["timestamp"].dt.hour
     plt.figure(figsize=(10, 4))

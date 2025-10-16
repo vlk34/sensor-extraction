@@ -9,6 +9,7 @@ Files
 - requirements.txt: Minimal Python dependencies
 - scripts/visualize_temperature.py: Simulated temperature plots (Matplotlib + Seaborn)
 - scripts/analyze_timeseries.py: Per-sensor/metric statistics and anomaly counts
+- scripts/detect_and_plot.py: Combined anomaly detection (z-score/IQR) and visualization
 
 Prerequisites
 
@@ -61,6 +62,22 @@ Outputs are written under OUTPUT_DIR or ./outputs:
 - temperature_scatter.png (scatter over time)
 - temperature_hist.png (histogram with KDE)
 - temperature_box.png (boxplot by hour)
+
+Detect and plot anomalies
+Run anomaly detection and generate per-group figures (using CSVs or simulation):
+
+# From CSVs
+
+python scripts/detect_and_plot.py --inputs outputs/\*.csv --method zscore --threshold 3.0 --plot
+
+# Simulated
+
+python scripts/detect_and_plot.py --simulate --num-sensors 2 --metrics temperature vibration --plot
+
+Outputs:
+
+- anomaly_report.csv listing anomalous rows
+- <sensor>\_<metric>\_anomalies.png images per group
 
 Analyze time-series summaries
 Compute per-sensor/metric statistics from existing CSVs or simulated data:

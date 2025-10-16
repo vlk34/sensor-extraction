@@ -2,16 +2,15 @@
 """
 Analyze time-series sensor data from CSV exports or simulated inputs.
 
-Capabilities:
+Capabilities
 - Load one or more CSV files exported by scripts like sensor_extract.py
   (expected columns: timestamp, sensor_id, metric, value[, ...]).
 - Alternatively, simulate multi-sensor data for quick experimentation.
 - Compute per (sensor_id, metric) statistics: count, mean, std, min, max,
-  percentiles, missing-rate (if applicable), and simple anomaly counts using
-  z-score thresholds.
+  quartiles (p25/p50/p75), and a z-score based anomaly count.
 - Export per-group summaries as CSV and optional JSON.
 
-Usage examples:
+Usage
   # Analyze exported CSVs
   python scripts/analyze_timeseries.py --inputs outputs/*.csv --zscore-threshold 3.0
 
@@ -35,6 +34,7 @@ import pandas as pd
 
 @dataclass
 class SimConfig:
+    """Configuration for simulated multi-sensor datasets."""
     num_sensors: int = 3
     metrics: Sequence[str] = ("temperature", "vibration")
     num_days: int = 2
@@ -58,6 +58,7 @@ class SimConfig:
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
+    """Parse CLI arguments for analysis and simulation options."""
     parser = argparse.ArgumentParser(description="Analyze time-series sensor data.")
     parser.add_argument("--inputs", nargs="*", help="CSV files or glob patterns to analyze")
     parser.add_argument("--output-dir", default=os.getenv("OUTPUT_DIR") or "outputs", help="Where to write summaries")
@@ -74,11 +75,13 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
 
 
 def ensure_output_dir(path: str) -> str:
+    """Ensure output directory exists and return it."""
     os.makedirs(path, exist_ok=True)
     return path
 
 
 def expand_inputs(patterns: Sequence[str]) -> List[str]:
+    """Expand file globs into a unique, sorted list of paths."""
     files: List[str] = []
     for p in patterns:
         files.extend(glob.glob(p))
@@ -86,6 +89,7 @@ def expand_inputs(patterns: Sequence[str]) -> List[str]:
 
 
 def read_csvs(file_paths: Sequence[str]) -> pd.DataFrame:
+    """Read and concatenate CSVs; validate required columns and parse timestamps."""
     frames: List[pd.DataFrame] = []
     for path in file_paths:
         df = pd.read_csv(path)
@@ -102,6 +106,7 @@ def read_csvs(file_paths: Sequence[str]) -> pd.DataFrame:
 
 
 def simulate_dataset(cfg: SimConfig, seed: int) -> pd.DataFrame:
+    """Generate synthetic readings including a diurnal component for temperature."""
     rng = np.random.default_rng(seed)
     start = datetime.now().replace(minute=0, second=0, microsecond=0)
     total_hours = cfg.num_days * 24
@@ -130,6 +135,7 @@ def simulate_dataset(cfg: SimConfig, seed: int) -> pd.DataFrame:
 
 
 def compute_group_stats(df: pd.DataFrame, zscore_threshold: float) -> pd.DataFrame:
+    """Aggregate statistics and z-score anomaly counts per (sensor_id, metric)."""
     def _agg(group: pd.DataFrame) -> pd.Series:
         values = group["value"].astype(float)
         mean = float(values.mean())
@@ -158,6 +164,7 @@ def compute_group_stats(df: pd.DataFrame, zscore_threshold: float) -> pd.DataFra
 
 
 def export_summary(summary: pd.DataFrame, output_dir: str, base_name: str, write_json: bool) -> Tuple[str, Optional[str]]:
+    """Write CSV and optional JSON summaries; return written paths."""
     csv_path = os.path.join(output_dir, f"{base_name}_summary.csv")
     summary.to_csv(csv_path, index=False)
     json_path = None

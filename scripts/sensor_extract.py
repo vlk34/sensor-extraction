@@ -1,26 +1,22 @@
 #!/usr/bin/env python3
 """
-Sensor data extraction and basic anomaly detection utility.
+Extract time-series sensor readings from SQL Server and optionally flag anomalies.
 
-Features:
-- Pulls time-series sensor signals (e.g., temperature, vibration, pressure) for
-  a given time window from a SQL Server database (read-only recommended).
-- Performs validation, computes basic statistics, flags simple anomalies,
-  and exports CSV and optional charts for quick review.
+Overview
+- Queries a read-only SQL Server database for a single `sensor_id` and `metric`
+  within a provided time window.
+- Performs basic quality checks, computes mean/std, flags outliers via z-score,
+  and exports results as CSV (plus an optional PNG plot).
 
-Security and configuration:
-- Uses environment variables for credentials and configuration.
-- Avoids printing secrets; supports least-privilege accounts.
+Security and configuration
+- Configuration is provided via environment variables (DB_SERVER, DB_NAME,
+  DB_USER, DB_PASSWORD, optional DB_DRIVER and DB_TIMEOUT_SECONDS). Secrets are
+  never printed to stdout.
 
-Data model assumptions (adapt as needed):
-- Table: dbo.SensorReadings
-  Columns:
-    - timestamp (datetime2)
-    - sensor_id (nvarchar)
-    - metric (nvarchar) e.g., 'temperature', 'vibration', 'pressure'
-    - value (float)
+Data model assumptions (adapt as needed)
+- Table: dbo.SensorReadings(timestamp, sensor_id, metric, value)
 
-Usage example (Windows CMD):
+Windows example
   setx DB_SERVER "tcp:127.0.0.1,1433"
   setx DB_NAME "PlantReplica"
   setx DB_USER "readonly_user"
@@ -33,8 +29,6 @@ Usage example (Windows CMD):
     --start "2025-08-01T00:00:00" \
     --end   "2025-08-07T23:59:59" \
     --plot
-
-Dependencies: see requirements.txt
 """
 
 from __future__ import annotations
@@ -69,6 +63,7 @@ except Exception:
 
 @dataclasses.dataclass
 class DbConfig:
+    """Database connection parameters sourced from environment variables."""
     server: str
     database: str
     user: str
@@ -78,6 +73,7 @@ class DbConfig:
 
 
 def read_env_config() -> DbConfig:
+    """Read DB config from environment variables and validate required values."""
     missing: List[str] = []
     server = os.getenv("DB_SERVER") or ""
     if not server:
@@ -106,6 +102,7 @@ def read_env_config() -> DbConfig:
 
 
 def build_connection_string(cfg: DbConfig) -> str:
+    """Construct an ODBC connection string for SQL Server."""
     # Trusted_Connection=no ensures SQL auth; MARS off for simplicity.
     return (
         f"DRIVER={{{{ {cfg.driver} }}}};"
@@ -119,6 +116,7 @@ def build_connection_string(cfg: DbConfig) -> str:
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
+    """Parse CLI options for extraction window and output settings."""
     parser = argparse.ArgumentParser(
         description="Extract sensor readings from SQL Server and do basic QC/anomaly flags.",
     )
@@ -137,11 +135,13 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
 
 
 def ensure_output_dir(path: str) -> str:
+    """Create output directory if it does not exist and return the path."""
     os.makedirs(path, exist_ok=True)
     return path
 
 
 def parse_iso_dt(value: str) -> datetime:
+    """Parse ISO 8601 datetime string, raising ValueError on failure."""
     try:
         return datetime.fromisoformat(value)
     except ValueError as exc:
@@ -149,6 +149,7 @@ def parse_iso_dt(value: str) -> datetime:
 
 
 def query_readings(conn, sensor_id: str, metric: str, start_ts: datetime, end_ts: datetime, limit: int):
+    """Execute parameterized query to fetch readings for the given filters."""
     params: List[object] = [sensor_id, start_ts, end_ts]
     metric_filter = ""
     if metric != "any":
@@ -171,6 +172,7 @@ def query_readings(conn, sensor_id: str, metric: str, start_ts: datetime, end_ts
 
 
 def to_dataframe(rows) -> "pd.DataFrame":  # type: ignore[name-defined]
+    """Convert pyodbc rows to a pandas DataFrame sorted by timestamp."""
     if pd is None:
         raise RuntimeError("pandas is required for dataframe operations. Please install dependencies.")
     df = pd.DataFrame.from_records(rows, columns=["timestamp", "sensor_id", "metric", "value"])
@@ -179,12 +181,14 @@ def to_dataframe(rows) -> "pd.DataFrame":  # type: ignore[name-defined]
 
 
 def compute_stats(df) -> Tuple[float, float]:
+    """Return (mean, std) of the `value` column."""
     mean = float(df["value"].mean())
     std = float(df["value"].std(ddof=0))
     return mean, std
 
 
 def flag_anomalies(df, zscore_threshold: float) -> "pd.DataFrame":  # type: ignore[name-defined]
+    """Add z-score and is_anomaly columns based on the provided threshold."""
     if pd is None:
         raise RuntimeError("pandas is required for anomaly flagging.")
     mean, std = compute_stats(df)
@@ -200,12 +204,14 @@ def flag_anomalies(df, zscore_threshold: float) -> "pd.DataFrame":  # type: igno
 
 
 def export_csv(df, output_dir: str, base_name: str) -> str:
+    """Write DataFrame to CSV and return the file path."""
     path = os.path.join(output_dir, f"{base_name}.csv")
     df.to_csv(path, index=False, quoting=csv.QUOTE_MINIMAL)
     return path
 
 
 def export_plot(df, output_dir: str, base_name: str) -> Optional[str]:
+    """Render a simple plot with anomalies highlighted, returning the PNG path."""
     if plt is None:
         return None
     plt.figure(figsize=(10, 4))
